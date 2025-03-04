@@ -1,5 +1,5 @@
 
-train: C:/Users/nandu/Downloads/Robotics-MFC-S4-D12/pothole_image_data/train/images
-val: C:/Users/nandu/Downloads/Robotics-MFC-S4-D12/pothole_image_data/val/images
+train: pothole_image_data/train/images
+val: pothole_image_data/val/images
 nc: 1  # Number of classes (1 for potholes)
 names: ['pothole']  # Class names
