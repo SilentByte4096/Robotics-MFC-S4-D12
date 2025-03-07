@@ -36,9 +36,9 @@ while cap.isOpened():
         for box in r.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = box.conf[0]  # Confidence score
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
             cv2.putText(frame, f"Pothole {conf:.2f}", (x1, y1 - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
     # Write the frame to the output video file
     out.write(frame)
