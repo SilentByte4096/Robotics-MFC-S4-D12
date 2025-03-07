@@ -1,0 +1,13 @@
+train: C:\Users\Srikrishna\Downloads\pothole\train\images
+val: C:\Users\Srikrishna\Downloads\pothole\valid\images
+test: ../test/images
+
+nc: 1
+names: ['Pothole']
+
+roboflow:
+  workspace: farzad
+  project: pothole_segmentation_yolov8
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/farzad/pothole_segmentation_yolov8/dataset/1
