@@ -4,6 +4,7 @@ import math
 import time
 from queue import PriorityQueue
 import threading
+from ultralytics import YOLO
 
 class RealTimePotholeAvoidance:
     def __init__(self, vehicle_width=2.0, safety_margin=0.3, grid_size=0.1, 
@@ -54,40 +55,33 @@ class RealTimePotholeAvoidance:
         self.current_speed = speed
     
     def process_frame(self, frame, pothole_detector):
-        """
-        Process a new video frame with real-time pothole detection.
-        
-        Args:
-            frame: The current video frame
-            pothole_detector: A function or object that can detect potholes in the frame
-            
-        Returns:
-            Processed frame with pothole visualization and planned paths
-        """
         frame_start = time.time()
         
         # Store the current frame
         self.current_frame = frame.copy()
         
         # Detect potholes in real-time
-        bounding_boxes = pothole_detector(frame)
+        results = pothole_detector(frame)
         
         # Create obstacle map from detected potholes
         height, width = frame.shape[:2]
         obstacle_map = np.zeros((height, width), dtype=np.uint8)
         
         # Draw detected potholes on the frame and mark them in the obstacle map
-        for bbox in bounding_boxes:
-            x, y, w, h = bbox
-            # Draw bounding box on frame
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-            
-            # Mark the pothole and safety margin in the obstacle map
-            margin_pixels = int(self.total_margin / self.grid_size)
-            cv2.rectangle(obstacle_map, 
-                         (max(0, x - margin_pixels), max(0, y - margin_pixels)),
-                         (min(width, x + w + margin_pixels), min(height, y + h + margin_pixels)),
-                         255, -1)
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                w = x2 - x1
+                h = y2 - y1
+                # Draw bounding box on frame
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                
+                # Mark the pothole and safety margin in the obstacle map
+                margin_pixels = int(self.total_margin / self.grid_size)
+                cv2.rectangle(obstacle_map, 
+                             (max(0, x1 - margin_pixels), max(0, y1 - margin_pixels)),
+                             (min(width, x2 + margin_pixels), min(height, y2 + margin_pixels)),
+                             255, -1)
         
         # Update obstacle map for path planning thread
         self.obstacle_map = obstacle_map
@@ -166,7 +160,7 @@ class RealTimePotholeAvoidance:
             elapsed = time.time() - loop_start
             sleep_time = max(0, self.path_update_interval - elapsed)
             time.sleep(sleep_time)
-    
+        
     def plan_paths(self, obstacle_map, start_point, goal_point, num_paths=3):
         """
         Plan multiple possible paths to avoid potholes in real-time.
@@ -428,13 +422,11 @@ class RealTimePotholeAvoidance:
         return cost
     
     def visualize_paths(self, frame, paths, selected_path=None):
-        """
-        Visualize multiple paths on the frame, highlighting the selected path.
-        """
         result_frame = frame.copy()
         
         # Draw the current position and heading
-        cv2.circle(result_frame, self.current_position, 5, (255, 0, 0), -1)
+        current_position_int = (int(self.current_position[0]), int(self.current_position[1]))
+        cv2.circle(result_frame, current_position_int, 5, (255, 0, 0), -1)
         
         # Calculate endpoint of heading indicator
         heading_length = 20
@@ -442,7 +434,7 @@ class RealTimePotholeAvoidance:
             int(self.current_position[0] + heading_length * math.cos(self.current_heading)),
             int(self.current_position[1] + heading_length * math.sin(self.current_heading))
         )
-        cv2.line(result_frame, self.current_position, heading_end, (255, 0, 0), 2)
+        cv2.line(result_frame, current_position_int, heading_end, (255, 0, 0), 2)
         
         # Draw alternative paths
         for path, cost in paths:
@@ -453,8 +445,8 @@ class RealTimePotholeAvoidance:
             thickness = 1
             
             for j in range(len(path) - 1):
-                p1 = (path[j][0], path[j][1])
-                p2 = (path[j+1][0], path[j+1][1])
+                p1 = (int(path[j][0]), int(path[j][1]))
+                p2 = (int(path[j+1][0]), int(path[j+1][1]))
                 cv2.line(result_frame, p1, p2, color, thickness)
         
         # Draw the selected path
@@ -463,13 +455,13 @@ class RealTimePotholeAvoidance:
             thickness = 2
             
             for j in range(len(selected_path) - 1):
-                p1 = (selected_path[j][0], selected_path[j][1])
-                p2 = (selected_path[j+1][0], selected_path[j+1][1])
+                p1 = (int(selected_path[j][0]), int(selected_path[j][1]))
+                p2 = (int(selected_path[j+1][0]), int(selected_path[j+1][1]))
                 cv2.line(result_frame, p1, p2, color, thickness)
             
             # Display the next waypoint
             if len(selected_path) > 1:
-                next_waypoint = selected_path[1]  # First waypoint after current position
+                next_waypoint = (int(selected_path[1][0]), int(selected_path[1][1]))
                 cv2.circle(result_frame, next_waypoint, 5, (0, 255, 0), -1)
         
         # Display average planning time
@@ -480,122 +472,60 @@ class RealTimePotholeAvoidance:
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
         return result_frame
-    
+
     def execute_path_step(self, path):
         """
         Execute one step along the selected path.
-        In a real system, this would generate steering and throttle commands.
+        This function simulates the vehicle moving along the path.
         """
-        if not path or len(path) < 2:
+        if len(path) < 2:
             return
         
-        # Get the next waypoint
-        next_waypoint = path[1]  # Skip the first point which should be current position
+        # Move to the next waypoint
+        next_waypoint = path[1]
+        self.current_position = next_waypoint
         
-        # Calculate desired heading to the next waypoint
+        # Update heading based on the direction to the next waypoint
         dx = next_waypoint[0] - self.current_position[0]
         dy = next_waypoint[1] - self.current_position[1]
-        desired_heading = math.atan2(dy, dx)
+        self.current_heading = math.atan2(dy, dx)
         
-        # Calculate steering angle (difference between current and desired heading)
-        steering_angle = desired_heading - self.current_heading
-        
-        # Normalize steering angle to [-pi, pi]
-        while steering_angle > math.pi:
-            steering_angle -= 2 * math.pi
-        while steering_angle < -math.pi:
-            steering_angle += 2 * math.pi
-        
-        # In a real system, convert steering_angle to actual steering command
-        # and send it to the vehicle control system
-        
-        # For simulation, just print the steering angle
-        # print(f"Steering angle: {math.degrees(steering_angle):.1f} degrees")
-        
-        # Update position and heading for simulation
-        # In a real system, these would be updated from vehicle sensors
-        self.current_heading += steering_angle * 0.1  # Smooth steering
-        
-        # Normalize heading
-        while self.current_heading > math.pi:
-            self.current_heading -= 2 * math.pi
-        while self.current_heading < -math.pi:
-            self.current_heading += 2 * math.pi
-        
-        # Move forward at current speed
-        self.current_position = (
-            self.current_position[0] + self.current_speed * math.cos(self.current_heading),
-            self.current_position[1] + self.current_speed * math.sin(self.current_heading)
-        )
-    
-    def shutdown(self):
-        """Clean shutdown of the system."""
-        self.running = False
-        if self.path_thread.is_alive():
-            self.path_thread.join(timeout=1.0)
+        # Simulate movement by updating the current position
+        self.current_position = next_waypoint
 
-
-# Example usage with real-time video processing
 def main():
-    # Sample pothole detector function (replace with your actual detector)
-    def sample_pothole_detector(frame):
-        """
-        Simulate a pothole detector.
-        In a real system, this would be your ML-based detector.
-        """
-        # This is just a placeholder - replace with actual detection code
-        height, width = frame.shape[:2]
-        
-        # Simulate random pothole detections
-        num_potholes = np.random.randint(1, 5)
-        potholes = []
-        
-        for _ in range(num_potholes):
-            x = np.random.randint(100, width - 100)
-            y = np.random.randint(100, height - 100)
-            w = np.random.randint(20, 80)
-            h = np.random.randint(20, 60)
-            potholes.append([x, y, w, h])
-            
-        return potholes
+    # Initialize the real-time pothole avoidance system
+    avoidance = RealTimePotholeAvoidance()
     
-    # Initialize the avoidance system
-    avoidance = RealTimePotholeAvoidance(
-        vehicle_width=1.8,
-        safety_margin=0.5,
-        path_update_freq=15  # Update path 15 times per second
-    )
-    
-    # Initialize video capture (replace with actual video source)
-    video_path = ''  # Replace with your video file path
-    cap = cv2.VideoCapture(video_path)
+    # Load the video
+    cap = cv2.VideoCapture("output.mp4")
     if not cap.isOpened():
-        print("Could not open video source")
+        print("Error: Could not open video.")
         return
     
-    # Set initial position
+    # Define the codec and create VideoWriter object
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    avoidance.set_current_position(frame_width // 2, frame_height - 50, -math.pi/2, 5.0)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    out = cv2.VideoWriter("output_with_path.mp4", cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
     
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            # Process the frame with real-time pothole detection and avoidance
-            result_frame = avoidance.process_frame(frame, sample_pothole_detector)
-            
-            # Display the result
-            cv2.imshow('Real-time Pothole Avoidance', result_frame)
-            
-            if cv2.waitKey(1) & 0xFF == 27:  # Esc to exit
-                break
-    finally:
-        # Clean shutdown
-        avoidance.shutdown()
-        cap.release()
+    # Load the pothole detector model
+    model = YOLO("runs\\detect\\train2\\weights\\best.pt")
+    
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Process the frame to detect potholes and plan paths
+        result_frame = avoidance.process_frame(frame, model)
+        
+        # Write the frame to the output video
+        out.write(result_frame)
+    
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
