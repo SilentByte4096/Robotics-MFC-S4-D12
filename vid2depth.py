@@ -19,8 +19,8 @@ else:
     transform = midas_transforms.small_transform
 
 # Input and output video paths
-input_video_path = "demo.mp4"  # Replace with your video file
-output_video_path = "depth_video.mp4"  # Output video file
+input_video_path = "demo.avi"  # Replace with your video file
+output_video_path = "depth_video.avi"  # Output video file
 
 # Open the input video
 cap = cv2.VideoCapture(input_video_path)
@@ -35,7 +35,7 @@ fps = int(cap.get(cv2.CAP_PROP_FPS))
 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 # Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4
+fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for .avi
 out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height), isColor=False)
 
 # Process video frames
