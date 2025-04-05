@@ -1,5 +1,5 @@
-train: C:\Users\Srikrishna\Downloads\pothole\train\images
-val: C:\Users\Srikrishna\Downloads\pothole\valid\images
+train: C:\Users\Srikrishna\Documents\GitHub\Sem_4\Robotics-MFC-S4-D12\train\images
+val: C:\Users\Srikrishna\Documents\GitHub\Sem_4\Robotics-MFC-S4-D12\valid\images
 test: ../test/images
 
 nc: 1
