@@ -9,7 +9,7 @@ from ultralytics import YOLO  # Assuming your pothole model is YOLO-based
 # Load the pre-trained SegFormer model for semantic segmentation
 from transformers import SegformerFeatureExtractor, SegformerForSemanticSegmentation
 
-token = "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"  # Replace with the token you copied
+token = ""  # Replace with the token you copied
 feature_extractor = SegformerFeatureExtractor.from_pretrained(
     "nvidia/segformer-b0-finetuned-cityscapes-512-1024",  # Corrected model name
     token=token
