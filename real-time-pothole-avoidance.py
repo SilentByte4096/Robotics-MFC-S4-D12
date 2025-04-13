@@ -415,8 +415,8 @@ class PotholeAvoidanceSystem:
 
 def main():
     # Set up the video source and output
-    video_file = "segmented_road_output.mp4"
-    output_file = "result.avi"
+    video_file = "seg.mp4"
+    output_file = "result2.avi"
     grid_resolution = 20
     
     # Check if video file exists
