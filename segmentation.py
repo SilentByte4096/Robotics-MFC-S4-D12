@@ -18,7 +18,7 @@ segmentation_model.eval()
 pothole_model = YOLO('C:\\Users\\Srikrishna\\Documents\\GitHub\\Sem_4\\Robotics-MFC-S4-D12\\runs\\detect\\train2\\weights\\best.pt')  # Adjust path as necessary
 
 # Define video input and output paths
-video_path = 'demo.mp4'  # Replace with your video file path
+video_path = 'demo2.mp4'  # Replace with your video file path
 output_path = 'segmented_road_only_output.mp4'
 
 # Initialize video capture
