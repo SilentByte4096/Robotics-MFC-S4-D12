@@ -1,243 +1,168 @@
-import numpy as np
 import cv2
-from heapq import heappush, heappop
-from tqdm import tqdm
-import os
+import numpy as np
+import threading
+import queue
+import socket
+import json
+import sys
 import time
+import os
+import datetime
+from ultralytics import YOLO
+import msvcrt  # For non-blocking input on Windows
 
-# A* Path Planning Class
-class AStarPlanner:
-    def __init__(self, grid):
-        self.grid = grid.copy()
-        self.rows, self.cols = grid.shape
+# Configuration
+PI_IP = "192.168.58.189"
+PI_PORT = 65432
+MJPG_URL = f"http://192.168.58.189:8080/?action=stream"
+FRAME_WIDTH = 320
+FRAME_HEIGHT = 240
+COMMAND_INTERVAL = 0.5
 
-    def heuristic(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+# Shared resources
+command_queue = queue.Queue()
+stop_event = threading.Event()
+recording_event = threading.Event()
+last_command_time = time.time()
 
-    def get_neighbors(self, pos):
-        pos = tuple(pos)
-        neighbors = []
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        for dx, dy in directions:
-            new_x, new_y = pos[0] + dx, pos[1] + dy
-            if 0 <= new_x < self.cols and 0 <= new_y < self.rows and self.grid[new_y, new_x]:
-                neighbors.append((new_x, new_y))
-        return neighbors
+# Load YOLOv8 model for pothole detection
+pothole_model = YOLO('C:\\Users\\Srikrishna\\Documents\\GitHub\\Sem_4\\Robotics-MFC-S4-D12\\runs\\detect\\train2\\weights\\best.pt')
 
-    def find_path(self, start, goal):
-        start = tuple(start)
-        goal = tuple(goal)
+# Initialize video capture
+cap = cv2.VideoCapture(MJPG_URL)
+if not cap.isOpened():
+    print("Error: Could not open MJPG stream from the Raspberry Pi.")
+    sys.exit(1)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
+frame_width = FRAME_WIDTH
+frame_height = FRAME_HEIGHT
 
-        if not (0 <= start[0] < self.cols and 0 <= start[1] < self.rows and 
-                0 <= goal[0] < self.cols and 0 <= goal[1] < self.rows):
-            print(f"Out of bounds: start={start}, goal={goal}")
-            return []
+def pothole_in_path(pothole_boxes):
+    center_x = frame_width // 2
+    bot_width_pixels = frame_width // 4
+    for x1, y1, x2, y2 in pothole_boxes:
+        if x1 <= center_x + bot_width_pixels and x2 >= center_x - bot_width_pixels:
+            return True
+    return False
 
-        if not self.grid[start[1], start[0]]:
-            start = self.find_nearest_valid(start)
-            if not start:
-                print(f"No valid start found near {start}")
-                return []
+def detect_potholes(frame):
+    pothole_boxes = []
+    results = pothole_model(frame)
+    for box in results[0].boxes:
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        pothole_boxes.append((x1, y1, x2, y2))
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    return pothole_boxes
 
-        if not self.grid[goal[1], goal[0]]:
-            goal = self.find_nearest_valid(goal)
-            if not goal:
-                print(f"No valid goal found near {goal}")
-                return []
-
-        open_set = [(0, start)]
-        came_from = {}
-        g_score = {start: 0}
-        f_score = {start: self.heuristic(start, goal)}
-
-        while open_set:
-            current = heappop(open_set)[1]
-
-            if current == goal:
-                path = []
-                while current in came_from:
-                    path.append(current)
-                    current = came_from[current]
-                path.append(start)
-                return [list(p) for p in path[::-1]]
-
-            for neighbor in self.get_neighbors(current):
-                tentative_g_score = g_score[current] + 1
-
-                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + self.heuristic(neighbor, goal)
-                    heappush(open_set, (f_score[neighbor], neighbor))
-
-        print(f"No path found from {start} to {goal}")
-        return []
-
-    def find_nearest_valid(self, point):
-        point = tuple(point)
-        for r in range(1, 50):
-            for dx in range(-r, r + 1):
-                for dy in range(-r, r + 1):
-                    x, y = point[0] + dx, point[1] + dy
-                    if 0 <= x < self.cols and 0 <= y < self.rows and self.grid[y, x]:
-                        return (x, y)
-        return None
-
-# Utility Functions
-def create_mask(frame):
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower_green = np.array([40, 40, 40])
-    upper_green = np.array([80, 255, 255])
-    lower_red = np.array([0, 120, 70])
-    upper_red = np.array([10, 255, 255])
-    mask_green = cv2.inRange(hsv, lower_green, upper_green)
-    mask_red = cv2.inRange(hsv, lower_red, upper_red)
-    mask = mask_green > 0
-    mask[mask_red > 0] = 0
-    return mask.astype(np.uint8)
-
-def detect_pothole(frame, robot_pos):
-    # Placeholder: Detect pothole within 10 pixels of robot
-    # Replace with your actual pothole detection logic
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower_gray = np.array([0, 0, 50])
-    upper_gray = np.array([180, 50, 150])  # Example range for potholes (adjust)
-    pothole_mask = cv2.inRange(hsv, lower_gray, upper_gray)
-    
-    x, y = map(int, robot_pos)
-    detection_radius = 10
-    y_min, y_max = max(0, y - detection_radius), min(frame.shape[0], y + detection_radius)
-    x_min, x_max = max(0, x - detection_radius), min(frame.shape[1], x + detection_radius)
-    
-    if np.any(pothole_mask[y_min:y_max, x_min:x_max]):
-        # Return center of detected pothole (simplified)
-        pothole_y, pothole_x = np.where(pothole_mask[y_min:y_max, x_min:x_max])
-        return [x_min + pothole_x[0], y_min + pothole_y[0]]
-    return None
-
-def draw_path(frame, path, color=(255, 0, 0)):
-    if not path or len(path) < 2:
-        return
-    for i in range(len(path) - 1):
-        start_pt = tuple(map(int, path[i]))
-        end_pt = tuple(map(int, path[i + 1]))
-        if (0 <= start_pt[0] < frame.shape[1] and 0 <= start_pt[1] < frame.shape[0] and 
-            0 <= end_pt[0] < frame.shape[1] and 0 <= end_pt[1] < frame.shape[0]):
-            cv2.line(frame, start_pt, end_pt, color, 2)
-
-def draw_robot(frame, position, color=(0, 255, 0), radius=5):
-    position = tuple(map(int, position))
-    if 0 <= position[0] < frame.shape[1] and 0 <= position[1] < frame.shape[0]:
-        cv2.circle(frame, position, radius, color, -1)
-        cv2.circle(frame, position, int(radius + 10), (0, 255, 255), 1)
-
-def find_goal_position(start_pos, distance_y, mask):
-    start_pos = tuple(start_pos)
-    goal = [start_pos[0], max(0, start_pos[1] - distance_y)]
-    planner = AStarPlanner(mask)
-    if not mask[int(goal[1]), int(goal[0])]:
-        nearest = planner.find_nearest_valid(goal)
-        if nearest:
-            return list(nearest)
-        return list(start_pos)
-    return goal
-
-def plan_path_segment(start_pos, frame_mask, distance_y):
-    planner = AStarPlanner(frame_mask)
-    goal = find_goal_position(start_pos, distance_y, frame_mask)
-    path = planner.find_path(start_pos, goal)
-    return path
-
-# Main Pipeline
-def main_pipeline(video_path, output_video_path="output_video.avi", output_frames_dir="output_frames", 
-                  distance_y=100, steps_per_frame=1, delay_per_frame=0.5):
-    cap = cv2.VideoCapture(video_path)
+def display_video():
+    cap = cv2.VideoCapture(MJPG_URL)
     if not cap.isOpened():
-        raise ValueError(f"Cannot open video file at {video_path}")
-
-    ret, first_frame = cap.read()
-    if not ret:
-        raise ValueError("Cannot read first frame")
-
-    height, width = first_frame.shape[:2]
-    start_pos = (width // 2, height // 2)
-
-    first_mask = create_mask(first_frame)
-    planner = AStarPlanner(first_mask)
-    if not first_mask[start_pos[1], start_pos[0]]:
-        start_pos = planner.find_nearest_valid(start_pos)
-        if not start_pos:
-            raise ValueError("No traversable starting point found")
-        print(f"Adjusted start position to {start_pos}")
-
-    current_pos = np.array(start_pos)
-    current_path = plan_path_segment(current_pos, first_mask, distance_y)
-    path_index = 0
-
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
-
-    if not os.path.exists(output_frames_dir):
-        os.makedirs(output_frames_dir)
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_count = 0
-
-    with tqdm(total=total_frames, desc="Processing and Saving") as pbar:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            curr_mask = create_mask(frame)
-
-            # Simulate pothole detection
-            pothole = detect_pothole(frame, current_pos)
-            if pothole:
-                # Mark pothole as non-traversable in mask
-                px, py = map(int, pothole)
-                curr_mask[max(0, py-5):min(height, py+5), max(0, px-5):min(width, px+5)] = 0
-                # Replan path to avoid pothole
-                current_path = plan_path_segment(current_pos, curr_mask, distance_y)
-                path_index = 0
-
-            if current_path and path_index < len(current_path):
-                steps_to_take = min(steps_per_frame, len(current_path) - path_index)
-                for _ in range(steps_to_take):
-                    next_pos = current_path[path_index]
-                    draw_path(frame, current_path, color=(255, 0, 0))  # Blue path
-                    draw_robot(frame, next_pos, radius=5)
-                    current_pos = np.array(next_pos)
-                    path_index += 1
+        print("Failed to open video stream")
+        stop_event.set()
+        return
+    
+    height, width = FRAME_HEIGHT, FRAME_WIDTH
+    video_writer = None
+    prev_time = time.time()
+    
+    while not stop_event.is_set():
+        ret, frame = cap.read()
+        if ret:
+            frame = cv2.resize(frame, (width, height))
+            pothole_boxes = detect_potholes(frame)
+            if pothole_in_path(pothole_boxes):
+                command = "stop"
             else:
-                draw_robot(frame, current_pos, radius=5)
-                # Replan if path is exhausted
-                current_path = plan_path_segment(current_pos, curr_mask, distance_y)
-                path_index = 0
-
-            frame_filename = os.path.join(output_frames_dir, f"frame_{frame_count:06d}.png")
-            cv2.imwrite(frame_filename, frame)
-            out.write(frame)
-
-            time.sleep(delay_per_frame)  # Simulate pothole detection delay
-
-            frame_count += 1
-            pbar.update(1)
-
+                command = "forward"
+            current_time = time.time()
+            if current_time - last_command_time >= COMMAND_INTERVAL:
+                command_queue.put({"action": command})
+                globals()['last_command_time'] = current_time
+            # Start recording if not already started
+            if recording_event.is_set() and video_writer is None:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = os.path.join("recordings", f"recording_{timestamp}.avi")
+                fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                video_writer = cv2.VideoWriter(filename, fourcc, 30, (width, height))
+            # Write frame if recording
+            if recording_event.is_set() and video_writer is not None:
+                video_writer.write(frame)
+            fps = 1 / (current_time - prev_time) if current_time != prev_time else 0
+            prev_time = current_time
+            cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.imshow('Video Feed', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                stop_event.set()
+                break
+        else:
+            print("Failed to get frame")
+            time.sleep(0.1)
+    
+    # Release video writer at the end
+    if video_writer is not None:
+        video_writer.release()
     cap.release()
-    out.release()
-    print(f"Video and frames saved. Video: {output_video_path}, Frames: {output_frames_dir}")
+    cv2.destroyAllWindows()
+
+def handle_socket():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((PI_IP, PI_PORT))
+        print(f"Connected to Pi at {PI_IP}:{PI_PORT}")
+    except Exception as e:
+        print(f"Failed to connect to Pi: {e}")
+        stop_event.set()
+        return
+    
+    while not stop_event.is_set():
+        try:
+            cmd = command_queue.get(timeout=0.1)
+            s.sendall(json.dumps(cmd).encode() + b'\n')
+            ack = s.recv(1024).decode().strip()
+            if not ack:
+                print("Connection closed by server")
+                break
+            elif ack != "ACK":
+                print("Did not receive ACK")
+        except queue.Empty:
+            continue
+        except Exception as e:
+            print(f"Socket error: {e}")
+            break
+    
+    s.close()
+
+def main():
+    os.makedirs("recordings", exist_ok=True)
+    recording_event.set()  # Start recording immediately
+    
+    video_thread = threading.Thread(target=display_video)
+    video_thread.start()
+    
+    socket_thread = threading.Thread(target=handle_socket)
+    socket_thread.start()
+    
+    try:
+        while not stop_event.is_set():
+            # Check for user input without blocking
+            if msvcrt.kbhit():
+                user_input = msvcrt.getch().decode().lower()
+                if user_input == "q":
+                    stop_event.set()
+                    print("Quitting program")
+                    break
+            time.sleep(0.1)  # Brief sleep to avoid busy-waiting
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        stop_event.set()
+    except Exception as e:
+        print(f"Error: {e}")
+        stop_event.set()
+    
+    video_thread.join()
+    socket_thread.join()
+    print("Program terminated")
 
 if __name__ == "__main__":
-    VIDEO_PATH = "seg.mp4"
-    OUTPUT_VIDEO_PATH = "output_video.avi"
-    OUTPUT_FRAMES_DIR = "output_frames"
-    DISTANCE_Y = 100
-    STEPS_PER_FRAME = 1  # Slow movement
-    DELAY_PER_FRAME = 0.5  # Adjust based on pothole detection speed
-
-    try:
-        main_pipeline(VIDEO_PATH, OUTPUT_VIDEO_PATH, OUTPUT_FRAMES_DIR, DISTANCE_Y, STEPS_PER_FRAME, DELAY_PER_FRAME)
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    main()
