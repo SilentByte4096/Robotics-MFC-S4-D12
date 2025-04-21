@@ -11,13 +11,13 @@ import time
 
 # Check if Pi's IP address is provided as a command-line argument
 if len(sys.argv) != 2:
-    print("Usage: python pothole.py 192.168.58.189")
+    print("Usage: python pothole.py 192.168.58.146")
     sys.exit(1)
 
 # Configuration
 PI_IP = sys.argv[1]  # Raspberry Pi's IP address from command line
 PI_PORT = 65432      # Port for socket communication
-MJPG_URL = f'http://192.168.58.189:8080/?action=stream'  # MJPG stream URL from Pi
+MJPG_URL = f'http://192.168.58.146:8080/?action=stream'  # MJPG stream URL from Pi
 
 # Load the pre-trained SegFormer model for road segmentation
 feature_extractor = SegformerFeatureExtractor.from_pretrained(

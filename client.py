@@ -10,13 +10,13 @@ import datetime
 
 # Check if Pi's IP address is provided as a command-line argument
 if len(sys.argv) != 2:
-    print("Usage: python client.py 192.168.58.189")
+    print("Usage: python client.py 192.168.58.146")
     sys.exit(1)
 
 # Configuration
 PI_IP = sys.argv[1]  # Get Pi's IP from command line
 PI_PORT = 65432      # Port the Pi's socket server is listening on
-MJPG_URL = f'http://192.168.58.189:8080/?action=stream'  # Adjust port/path based on your MJPG server setup
+MJPG_URL = f'http://192.168.58.146:8080/?action=stream'  # Adjust port/path based on your MJPG server setup
 
 # Shared resources
 stop_event = threading.Event()  # Event to signal threads to stop

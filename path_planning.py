@@ -72,7 +72,7 @@ def heuristic(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 # A* path planning algorithm
-def a_star(start, goal, grid):
+def a_star_planning(start, goal, grid):
     """Find the shortest path from start to goal on the grid using A*."""
     neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
     close_set = set()

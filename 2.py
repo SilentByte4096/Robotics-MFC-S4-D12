@@ -12,9 +12,9 @@ from ultralytics import YOLO
 import msvcrt  # For non-blocking input on Windows
 
 # Configuration
-PI_IP = "192.168.58.189"
+PI_IP = "192.168.58.146"
 PI_PORT = 65432
-MJPG_URL = f"http://{PI_IP}:8080/?action=stream"
+MJPG_URL = f"http://192.168.58.146:8080/?action=stream"
 FRAME_WIDTH = 320
 FRAME_HEIGHT = 240
 COMMAND_INTERVAL = 0.5
