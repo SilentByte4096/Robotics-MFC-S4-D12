@@ -15,11 +15,11 @@ segmentation_model = SegformerForSemanticSegmentation.from_pretrained(
 segmentation_model.eval()
 
 # Load your pothole detection model
-pothole_model = YOLO('C:\\Users\\Srikrishna\\Documents\\GitHub\\Sem_4\\Robotics-MFC-S4-D12\\runs\\detect\\train2\\weights\\best.pt')  # Adjust path as necessary
+pothole_model = YOLO('C:\\Users\\srikr\\Documents\\GitHub\\Robotics-MFC-S4-D12-1\\best.pt')  # Adjust path as necessary
 
 # Define video input and output paths
-video_path = 'demo2.mp4'  # Replace with your video file path
-output_path = 'segmented_road_only_output.mp4'
+video_path = 'C:\\Users\\srikr\\Documents\\GitHub\\Robotics-MFC-S4-D12-1\\Demo_videos\\demo.mp4'  # Replace with your video file path
+output_path = 'C:\\Users\\srikr\\Documents\\GitHub\\Robotics-MFC-S4-D12-1\\Output_Videos\\segmented_road_only_output.mp4'
 
 # Initialize video capture
 cap = cv2.VideoCapture(video_path)
@@ -84,9 +84,9 @@ while cap.isOpened():
     out.write(output_frame)
 
     # Optional: Display the frame (comment out if not needed)
-    # cv2.imshow('Segmented Road Only', output_frame)
-    # if cv2.waitKey(1) & 0xFF == ord('q'):
-    #     break
+    cv2.imshow('Segmented Road Only', output_frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
     frame_count += 1
     print(f"Processed frame {frame_count}")
