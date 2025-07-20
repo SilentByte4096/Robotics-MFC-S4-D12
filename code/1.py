@@ -14,7 +14,7 @@ import msvcrt  # For non-blocking input on Windows
 # Configuration
 PI_IP = "192.168.58.146"
 PI_PORT = 65432
-MJPG_URL = f"http://192.168.58.146:8080/?action=stream"
+MJPG_URL = f"http://10.12.209.62:8080/?action=stream"
 FRAME_WIDTH = 320
 FRAME_HEIGHT = 240
 COMMAND_INTERVAL = 0.5
@@ -26,7 +26,7 @@ recording_event = threading.Event()
 last_command_time = time.time()
 
 # Load YOLOv8 model for pothole detection
-pothole_model = YOLO('C:\\Users\\Srikrishna\\Documents\\GitHub\\Sem_4\\Robotics-MFC-S4-D12\\runs\\detect\\train2\\weights\\best.pt')
+pothole_model = YOLO('C:\\Users\\srikr\\Documents\\GitHub\\Robotics-MFC-S4-D12-1\\best.pt')
 
 # Initialize video capture
 cap = cv2.VideoCapture(MJPG_URL)
